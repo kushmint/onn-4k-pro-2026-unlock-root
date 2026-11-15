@@ -7,7 +7,7 @@
 
 ---
 
-[**Project website — compatibility, setup and measured results**](https://openensemble.github.io/onn-4k-pro-2026-unlock-root/)
+[**Project website — compatibility, setup and measured results**](https://kushmint.github.io/onn-4k-pro-2026-unlock-root/)
 
 <p align="center">
   <img src="assets/images/onn-4k-pro-us-and-canada.jpg" width="620" alt="US and Canadian 2026 onn 4K Pro boxes side by side — both supported">
