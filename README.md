@@ -402,6 +402,13 @@ hardware verification by [openensemble](https://github.com/openensemble/onn-4k-p
 Canada/ROW (`jarvis2_row`) support, slot diagnostic extension, and ROW hardware
 verification by [kushmint](https://github.com/kushmint).
 
+## Support this fork
+
+If this saved you time or a USB cable, consider a donation. Building and testing
+Canada/ROW support took real hardware, real time, and a lot of debugging.
+
+**Bitcoin:** `bc1qneqyj49zvxceyxt4vupnqlet2n7kxppgelqv8w9qdf3xzw98t5tqcqw7xy`
+
 ## Licenses
 
 See [third-party license information](THIRD_PARTY.md).
