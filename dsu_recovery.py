@@ -193,7 +193,7 @@ def restart(backend, guide_path, state, record, selected, ui, skip_root_check=Fa
     with working(ui, protect=True) as cancellation:
         # Recheck after the owner has reviewed the exact device and deletion list.
         check_host(device, state)
-        original_android(device, current["android_id"], current["boot_id"])
+        original_android(device, current["android_id"], current["boot_id"], skip_root_check=skip_root_check)
         o.require(downloads(device) == current["downloads"], "Temporary downloads changed during confirmation")
         if transaction:
             restart_guide(location, plan)
@@ -219,12 +219,12 @@ def restart(backend, guide_path, state, record, selected, ui, skip_root_check=Fa
             # Stop the asynchronous installer before removing its source archive or DSU.
             o.save(context.s.path / "restart-attempt.json", {**transaction, **current}, exclusive=True)
             device.shell("stop-dsu-installer", "am", "force-stop", "com.android.dynsystem")
-            original_android(device, current["android_id"], current["boot_id"])
+            original_android(device, current["android_id"], current["boot_id"], skip_root_check=skip_root_check)
             device.shell("remove-abandoned-dsu", "gsi_tool", "wipe", timeout=60)
-            after = original_android(device, current["android_id"], current["boot_id"])
+            after = original_android(device, current["android_id"], current["boot_id"], skip_root_check=skip_root_check)
             o.require(after["dsu_state"] == "normal", "Temporary-system removal is not confirmed. " + HINT)
             for item in current["downloads"]:
-                original_android(device, current["android_id"], current["boot_id"])
+                original_android(device, current["android_id"], current["boot_id"], skip_root_check=skip_root_check)
                 name = shlex.quote(item["path"])
                 command = ("set -e; test -f " + name + "; test ! -L " + name +
                            '; test "$(stat -c %s ' + name + ')" = ' + str(item["bytes"]) +
@@ -232,7 +232,7 @@ def restart(backend, guide_path, state, record, selected, ui, skip_root_check=Fa
                            shlex.quote(item["sha256"] + "  " + item["path"]) +
                            "; rm -- " + name + "; test ! -e " + name)
                 device.shell("remove-abandoned-upload", "sh", "-c", command, timeout=60)
-            after = original_android(device, current["android_id"], current["boot_id"])
+            after = original_android(device, current["android_id"], current["boot_id"], skip_root_check=skip_root_check)
             o.require(after["dsu_state"] == "normal" and not downloads(device), "Temporary cleanup incomplete. " + HINT)
             connection.create_record(completed, {
                 "schema": SCHEMA, "binding": dict(device.binding), "cycle": transaction["cycle"],

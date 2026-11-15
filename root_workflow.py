@@ -364,7 +364,10 @@ def flash_script(binding, boot, remote, attempt, patch_hash, stock_sha256=None):
         stock_sha256 = o.PROFILE["init_boot_sha256"]
     profile = o.active_profile(binding)
     slot = o.slot_profile(binding)
-    values = {"SERIAL": binding["ro.serialno"], "FINGERPRINT": profile["fingerprint"],
+    # Inside the DSU, ro.build.fingerprint is the hybrid (ROW vendor + US system).
+    # Use dsu_fingerprint when available so the flash script's getprop check passes.
+    fingerprint = profile.get("dsu_fingerprint", profile["fingerprint"])
+    values = {"SERIAL": binding["ro.serialno"], "FINGERPRINT": fingerprint,
               "BOOTLOADER": profile["bootloader"], "BOOT_ID": boot,
               "SLOT": binding["ro.boot.slot_suffix"], "PARTITION": o.root_partition(binding),
               "BLOCK_PATH": slot["root_block_path"],
