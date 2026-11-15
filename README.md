@@ -1,6 +1,8 @@
 # 2026 onn 4K Pro — unlock and permanent root
 
-> **This fork adds Canada/ROW (`jarvis2_row`) support.** See the [Canada/ROW section](#canadarow-variant-jarvis2_row) below.
+**v1.0.0** — Full network-only unlock and root for both US (`jarvis2`) and Canada/ROW (`jarvis2_row`).
+
+> **This fork adds Canada/ROW (`jarvis2_row`) support** with full network-only DSU root — no USB cable required. See the [Canada/ROW section](#canadarow-variant-jarvis2_row) below.
 > Original work by [openensemble](https://github.com/openensemble/onn-4k-pro-2026-unlock-root) — full credit to them for discovering the AVB TA unlock method and building the guided installer. This fork extends it.
 
 ---
@@ -75,12 +77,21 @@ A stock backup does not guarantee recovery. Read the [recovery details](docs/REC
 
 ## Canada/ROW variant (`jarvis2_row`)
 
-**Hardware verified on:** JCA2627000951, URO3.260203.009.A2 / 15016191, bootloader 01.01.260304.134947, November 14, 2026.
+**Hardware verified on:** JCA2627000951, URO3.260203.009.A2 / 15016191, bootloader 01.01.260304.134947, November 15, 2026.
 
 The Canadian/international onn 4K Pro ships with a `jarvis2_row` firmware variant. It uses
 identical hardware to the US model — same Amlogic S905X5M SoC, same partition layout, same
 AVB Trusted Application misconfiguration. The guide auto-detects the ROW variant from the
 device fingerprint and applies the correct identity values.
+
+**The full network-only DSU path works on ROW hardware.** No USB cable is needed. The guide
+downloads the US OTA, builds a temporary Android system from it, boots it on the ROW device
+via DSU, installs Magisk from inside that temporary system, and reboots back to the original
+Canadian Android with permanent root. The US init_boot and DSU system image are fully
+compatible with ROW hardware — both models share the same S905X5M GKI ramdisk.
+
+Inside the DSU on ROW hardware, the device reports a hybrid fingerprint
+(`jarvis2_row` vendor + US build number). The guide handles this automatically.
 
 | Item | Canada/ROW value |
 | --- | --- |
@@ -95,9 +106,11 @@ device fingerprint and applies the correct identity values.
 ### What was verified on hardware
 
 - AVB TA unlock: `secure_lock_state` 1→0, 1 write invocation ✅
+- Full network-only DSU path (no USB cable): stock DSU boot + return, root DSU boot + Magisk flash ✅
 - Magisk 30.7 root installed and verified ✅
 - Widevine L1 preserved post-unlock ✅
 - SELinux: Enforcing ✅
+- DSU cleanup (temporary system removed, uploads deleted) ✅
 - Automatic OTA updates disabled ✅
 
 ### How to run it
@@ -114,16 +127,11 @@ The guide detects `jarvis2_row` automatically and displays a note explaining
 that the US OTA is used as the firmware source (the init_boot image is fully
 compatible — both models share the same S905X5M GKI ramdisk).
 
-### Known limitation — root installation path
+### Alternative: fastboot (requires USB-A cable)
 
-The ROW variant ships on its latest available firmware with no OTA update available.
-The full **network-only DSU path** (the default for US units) uses the US OTA partitions
-to build a temporary Android system. The init_boot from that OTA is confirmed compatible
-with ROW hardware, but **DSU boot of the US system image on a ROW device has not yet been
-hardware-verified**. The guide will attempt this path and display a note if it reaches
-the DSU boot step.
-
-If the DSU boot step fails, use the **fastboot alternative** (requires a USB-A cable):
+If you prefer to skip the DSU path (e.g. you already have a USB-A cable handy),
+you can flash the Magisk-patched init_boot directly via fastboot after the
+guide completes the unlock:
 
 ```sh
 # After unlock, the guide will have produced a Magisk-patched init_boot.
@@ -137,12 +145,6 @@ fastboot reboot
 
 The patched image is saved in `work/<session>/patched-init_boot.img` after the
 `prepare-root` step completes.
-
-### Help wanted
-
-If you have a Canadian onn on **older ROW firmware** (any build before 15016191), check
-for a system update and post the OTA URL here. That URL is the missing piece to
-make the network-only DSU path hardware-verified for ROW devices.
 
 ---
 
@@ -367,10 +369,14 @@ one supported unit. The packaged builder completed a clean build and metadata/co
 round trip; its helper's loaded ELF sections match the tested helper for the same binding.
 The packaged permanent-root verifier was also run on that unit.
 
-**Canada/ROW jarvis2_row (this fork):** AVB TA unlock, Magisk 30.7 root via fastboot
-flash of Magisk-patched US init_boot, Widevine L1 preservation, and OTA update
-blocking were verified on hardware (JCA2627000951, November 14, 2026). DSU boot of
-the US system image on ROW hardware has not yet been hardware-verified.
+**Canada/ROW jarvis2_row (this fork):** AVB TA unlock, full network-only DSU root path
+(stock DSU boot + return, root DSU boot + Magisk install + flash + readback + cleanup),
+Magisk 30.7 permanent root, Widevine L1 preservation, SELinux Enforcing, and OTA update
+blocking were all verified on hardware (JCA2627000951, slot A, November 15, 2026).
+The complete DSU lifecycle was tested: OTA download, DSU image build, stock rehearsal
+boot, root installation boot, init_boot flash with readback verification, DSU removal,
+and upload cleanup. Fastboot flash of Magisk-patched US init_boot was also independently
+verified on the same unit.
 
 The host tests cover identity/slot/boot mismatches, prior attempts, enable/reboot
 failures, interrupted writes, changed IP addresses, other onns at an old address,
@@ -384,7 +390,7 @@ responses. See the
 ## What was not tested
 
 - Recovery after a power loss or an unbootable modified `init_boot` image.
-- DSU boot of the US system image on `jarvis2_row` (ROW/Canada) hardware.
+- ROW slot B (slot A verified; slot B partition layout is identical but has not been hardware-tested on ROW).
 
 Passing the tests does not guarantee bug-free behavior or recovery from a failed
 installation. See the [recovery limitations](docs/RECOVERY.md).
