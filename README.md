@@ -335,9 +335,32 @@ For a text overview without contacting any device:
 python3 onn2026.py guide --preview
 ```
 
+### Common options
+
+| Flag | Description |
+| --- | --- |
+| `--target IP:PORT` | Connect to a specific device address (default: auto-detect) |
+| `--adb /path/to/adb` | Custom ADB binary (default: `adb` from PATH) |
+| `--work /path/to/dir` | Working directory for progress, backups and receipts (default: `work/` in repo) |
+| `--ndk /path/to/ndk` | Android NDK folder (default: auto-detect or prompted) |
+| `--reinstall` | Skip the existing-root check; use when re-running on an already-rooted device |
+| `--restart-dsu` | Remove leftover temporary Android/uploads and start the DSU process again |
+| `--preview` | Show a text overview of all steps without contacting any device |
+
+Example with all common options:
+
+```sh
+python3 onn2026.py \
+  --adb /usr/bin/adb \
+  --target 192.168.2.142:5555 \
+  --work ~/onn-root-work \
+  guide \
+  --ndk ~/android-ndk/android-ndk-r28c
+```
+
 The [advanced command reference](docs/MANUAL.md) retains the individual commands
 for inspection and reviewed manual work. Use `python3 onn2026.py --help` for
-options such as a custom ADB path. Do not mix manual mutations into an active guide.
+the full list. Do not mix manual mutations into an active guide.
 
 ## If the temporary-system build stops
 
