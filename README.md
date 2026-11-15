@@ -148,6 +148,15 @@ The patched image is saved in `work/<session>/patched-init_boot.img` after the
 
 ---
 
+## Support this fork
+
+If this saved you time or a USB cable, consider a donation. Building and testing
+Canada/ROW support took real hardware, real time, and a lot of debugging.
+
+**Bitcoin:** `bc1qneqyj49zvxceyxt4vupnqlet2n7kxppgelqv8w9qdf3xzw98t5tqcqw7xy`
+
+---
+
 ## What you need
 
 - An x86-64 Linux computer with Python 3.10+ and at least **12 GiB free**.
@@ -401,13 +410,6 @@ Original unlock method, guided installer, safety architecture, and all initial
 hardware verification by [openensemble](https://github.com/openensemble/onn-4k-pro-2026-unlock-root).
 Canada/ROW (`jarvis2_row`) support, slot diagnostic extension, and ROW hardware
 verification by [kushmint](https://github.com/kushmint).
-
-## Support this fork
-
-If this saved you time or a USB cable, consider a donation. Building and testing
-Canada/ROW support took real hardware, real time, and a lot of debugging.
-
-**Bitcoin:** `bc1qneqyj49zvxceyxt4vupnqlet2n7kxppgelqv8w9qdf3xzw98t5tqcqw7xy`
 
 ## Licenses
 
