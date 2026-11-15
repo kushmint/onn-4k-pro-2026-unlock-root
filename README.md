@@ -199,9 +199,17 @@ Some distributions supply older `erofs-utils` packages. The guide tests a small
 build and extraction before unlocking. If that check fails, follow the
 [host-tool upgrade instructions](docs/HOST_TOOLS.md).
 
-Install NDK **28.2.13676358** through Android SDK Manager. The guide looks in the
-usual SDK locations and asks for its folder if it cannot find it. It checks the
-tools before unlocking. The first matching firmware download is about 911 MB.
+Install Android NDK **r28c** (28.2.13676358). You can use Android SDK Manager, or
+download it directly:
+
+```sh
+curl -fLo /tmp/ndk28.zip https://dl.google.com/android/repository/android-ndk-r28c-linux.zip
+unzip -q /tmp/ndk28.zip -d ~/android-ndk
+```
+
+The guide looks in the usual SDK locations and asks for its folder if it cannot
+find it (`--ndk ~/android-ndk/android-ndk-r28c`). It checks the tools before
+unlocking. The first matching firmware download is about 911 MB.
 
 ## Start the guided walkthrough
 
