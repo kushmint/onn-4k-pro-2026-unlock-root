@@ -28,18 +28,34 @@ returned, SELinux remained **Enforcing**, the flashed image matched its readback
 and the temporary DSU installation was removed. No temporary-root exploit or
 custom startup script was used.
 
-| Supported item | Exact value |
+### 🇺🇸 US model (`jarvis2`)
+
+| Item | Value |
 | --- | --- |
 | Device | 2026 onn 4K Pro, `jarvis2`, AMLS905X5M / S7D |
 | Android | **14**, API **34** |
 | Build ID / incremental | **URO3.260203.035.A1 / 15640252** |
 | Security patch | **2026-06-01** |
 | Bootloader | **01.01.260525.135322** |
+| Serial prefix | **JUSA** |
 | Active slot | **`_a` or `_b`**, detected and bound for the entire workflow |
 | Userspace | **ARM32 / `armeabi-v7a`** |
 | Root target | Active **`init_boot_a`** (`mmcblk0p22`) or **`init_boot_b`** (`mmcblk0p23`), 8 MiB |
 
-This is support for that **exact build**, not every Android 14 firmware.
+### 🇨🇦 Canada/ROW model (`jarvis2_row`)
+
+| Item | Value |
+| --- | --- |
+| Device | 2026 onn 4K Pro, `jarvis2_row`, AMLS905X5M / S7D |
+| Android | **14**, API **34** |
+| Build ID / incremental | **URO3.260203.009.A2 / 15016191** |
+| Bootloader | **01.01.260304.134947** |
+| Serial prefix | **JCA** |
+| Partition layout | Identical to US (`init_boot_a` = `mmcblk0p22`, `init_boot_b` = `mmcblk0p23`) |
+| Userspace | **ARM32 / `armeabi-v7a`** |
+| Root target | Active **`init_boot_a`** (`mmcblk0p22`) or **`init_boot_b`** (`mmcblk0p23`), 8 MiB |
+
+This is support for those **exact builds**, not every Android 14 firmware.
 Other builds, Android versions, and the older 2024 `jarvis` are
 outside the supported profile. The script checks these values and stops on a
 mismatch. Do not edit the profile to bypass a mismatch.
