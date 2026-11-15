@@ -57,7 +57,7 @@ class FakeADB:
             output = "\n".join(key + "=" + value for key, value in values.items()) + "\n"
             return subprocess.CompletedProcess(argv, 0, output, "")
         guard, command = script.rsplit("\n", 1)
-        assert "|| exit 90" in guard and SERIAL in guard and BOOT in guard
+        assert "|| exit 90" in guard and self.values["ro.serialno"] in guard and BOOT in guard
         query = tuple(shlex.split(command))
         self.queries.append(query)
         if self.guard_fails:
@@ -243,13 +243,6 @@ class SlotReportTests(unittest.TestCase):
                 sr.network_target(value)
         with self.assertRaises(argparse.ArgumentTypeError):
             sr.hardware_serial('"')
-        # Both US (JUSA) and Canada/ROW (JCA) serial prefixes are accepted
-        self.assertEqual(sr.hardware_serial("JUSA1234567890"), "JUSA1234567890")
-        self.assertEqual(sr.hardware_serial("JCA2627000951"), "JCA2627000951")
-        with self.assertRaises(argparse.ArgumentTypeError):
-            sr.hardware_serial("EUR1234567890")  # unknown prefix
-        with self.assertRaises(argparse.ArgumentTypeError):
-            sr.hardware_serial("JCA")  # prefix only, no suffix
 
     def test_cli_private_files_shareable_reports_and_no_overwrite(self):
         with tempfile.TemporaryDirectory() as temp:

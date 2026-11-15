@@ -92,11 +92,12 @@ int main(int argc, char **argv) {
         fprintf(stderr, "Required: --unlock-once SERIAL FINGERPRINT BOOTLOADER SLOT BOOT_ID MARKER\n");
         return 20;
     }
-    int serial_ok = (strncmp(argv[2], "JUSA", 4) == 0 || (strncmp(argv[2], "JCA", 3) == 0 && strlen(argv[2]) > 3));
-    int fp_ok = (strncmp(argv[3], "onn/jarvis2/jarvis2:", 20) == 0 ||
-                 strncmp(argv[3], "onn/jarvis2_row/jarvis2:", 24) == 0);
-    if (getuid() != 2000 || geteuid() != 2000 ||
-        !serial_ok || !fp_ok ||
+    int us_identity = !strncmp(argv[2], "JUSA", sizeof("JUSA") - 1) && strlen(argv[2]) > sizeof("JUSA") - 1 &&
+        !strncmp(argv[3], "onn/jarvis2/jarvis2:", sizeof("onn/jarvis2/jarvis2:") - 1);
+    int row_identity = !strncmp(argv[2], "JCA", sizeof("JCA") - 1) && strlen(argv[2]) > sizeof("JCA") - 1 &&
+        !strncmp(argv[3], "onn/jarvis2_row/jarvis2:", sizeof("onn/jarvis2_row/jarvis2:") - 1);
+    if (getuid() != 2000 || geteuid() != 2000 || !(us_identity || row_identity) ||
+        strspn(argv[2], "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789") != strlen(argv[2]) ||
         strncmp(argv[7], "/data/local/tmp/oe26-avb-", sizeof("/data/local/tmp/oe26-avb-") - 1) ||
         strstr(argv[7], "..")) {
         fprintf(stderr, "Invalid identity, caller or marker path\n");
