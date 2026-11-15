@@ -10,10 +10,10 @@
 [**Project website — compatibility, setup and measured results**](https://openensemble.github.io/onn-4k-pro-2026-unlock-root/)
 
 <p align="center">
-  <img src="assets/images/onn-4k-pro-2026.png" width="460" alt="2026 onn 4K Pro with elongated fabric-covered body, remote, and blue retail box">
+  <img src="assets/images/onn-4k-pro-us-and-canada.jpg" width="620" alt="US and Canadian 2026 onn 4K Pro boxes side by side — both supported">
 </p>
 
-**2026 onn 4K Pro (`jarvis2`), pictured above.** [Photo: Walmart](https://www.walmart.com/ip/18382213962).
+**US and Canadian 2026 onn 4K Pro — both fully supported.** Left: US model (JUSA serial). Right: Canadian/ROW model (JCA serial, bilingual packaging).
 
 A guided, network-only unlock and root installer for the **2026 onn 4K Pro
 (`jarvis2`)**. Run `python3 onn2026.py` and follow the instructions in the terminal.
