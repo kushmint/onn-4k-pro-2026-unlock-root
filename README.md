@@ -188,6 +188,13 @@ On Debian/Ubuntu, install the host packages with:
 sudo apt-get install git python3 adb iproute2 erofs-utils secilc
 ```
 
+On Arch Linux / CachyOS:
+
+```sh
+sudo pacman -S git python android-tools iproute2 erofs-utils
+yay -S secilc
+```
+
 Some distributions supply older `erofs-utils` packages. The guide tests a small
 build and extraction before unlocking. If that check fails, follow the
 [host-tool upgrade instructions](docs/HOST_TOOLS.md).
