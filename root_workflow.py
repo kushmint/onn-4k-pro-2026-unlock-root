@@ -158,9 +158,10 @@ def reboot_verified(device, kind, proof):
 
 def build_matches(device, build):
     device.identify(unlocked=True)
-    profile = o.active_profile(device.binding)
+    # The DSU is always built from the US OTA regardless of device region,
+    # so fingerprint and bootloader in the build receipt are always US PROFILE values.
     expected = {"serial": device.binding["ro.serialno"], "profile": o.slot_profile(device.binding)["id"],
-                "fingerprint": profile["fingerprint"], "bootloader": profile["bootloader"],
+                "fingerprint": o.PROFILE["fingerprint"], "bootloader": o.PROFILE["bootloader"],
                 "slot": device.binding["ro.boot.slot_suffix"]}
     o.require(all(build.get(k) == v for k, v in expected.items()), "DSU build binding mismatch")
     o.require(build.get("single_use_required") is True and build.get("root_helper_autostart") is False,
@@ -246,7 +247,7 @@ def stage_dsu(device, args):
     o.save(attempt, request, exclusive=True)
     # A transfer timeout never initiates installation and is never automatically retried.
     # 600 s allows for slower connections (VPN, international users).
-    device.call("push-dsu", "push", str(archive), remote, timeout=600)
+    device.push_large("push-dsu", archive, remote, timeout=600)
     o.require(device.text("archive-readback", "sha256sum", remote, timeout=30).split()[0] == expected,
               "Uploaded DSU archive changed")
     device.identify(unlocked=True)
@@ -358,15 +359,18 @@ def pull_block(device, helper, dest):
     return result
 
 
-def flash_script(binding, boot, remote, attempt, patch_hash):
+def flash_script(binding, boot, remote, attempt, patch_hash, stock_sha256=None):
+    if stock_sha256 is None:
+        stock_sha256 = o.PROFILE["init_boot_sha256"]
+    profile = o.active_profile(binding)
     slot = o.slot_profile(binding)
-    values = {"SERIAL": binding["ro.serialno"], "FINGERPRINT": o.PROFILE["fingerprint"],
-              "BOOTLOADER": o.PROFILE["bootloader"], "BOOT_ID": boot,
+    values = {"SERIAL": binding["ro.serialno"], "FINGERPRINT": profile["fingerprint"],
+              "BOOTLOADER": profile["bootloader"], "BOOT_ID": boot,
               "SLOT": binding["ro.boot.slot_suffix"], "PARTITION": o.root_partition(binding),
               "BLOCK_PATH": slot["root_block_path"],
               "SIZE_PATH": "/sys/class/block/" + Path(slot["root_block_path"]).name + "/size",
               "PATCH_PATH": remote + "/patched-init_boot.img", "STOCK_PATH": remote + "/stock-init_boot.img",
-              "PATCH_SHA256": patch_hash, "STOCK_SHA256": o.PROFILE["init_boot_sha256"], "ATTEMPT_PATH": attempt}
+              "PATCH_SHA256": patch_hash, "STOCK_SHA256": stock_sha256, "ATTEMPT_PATH": attempt}
     template = (o.ROOT / "native/flash_init_boot.sh.in").read_text()
     for name, value in values.items():
         template = template.replace("@@" + name + "@@", shlex.quote(value))
@@ -400,35 +404,39 @@ def install_root(device, args):
                  "device_provisioned", "1", check=False)
     device.shell("bypass-setup-complete", "settings", "put", "secure",
                  "user_setup_complete", "1", check=False)
-    # ROW (jarvis2_row) devices: the DSU/init_boot hash checks below use the US
-    # stock hash. The ROW device has a different stock init_boot (different firmware
-    # build). The DSU root path is not hardware-verified for ROW; use fastboot instead.
-    # See README — Canada/ROW section for the fastboot alternative.
-    if o.is_row_device(device.binding):
-        raise o.Stop(
-            "ROW (jarvis2_row) device detected. The DSU root installation path "
-            "uses US init_boot hash checks that do not apply to your device. "
-            "Use the fastboot alternative instead:\n"
-            "  adb reboot fastboot\n"
-            "  fastboot flash init_boot_a <work/session/patched-init_boot.img>\n"
-            "See the README Canada/ROW section for full instructions."
-        )
+    row = o.is_row_device(device.binding)
     o.require(device.text("dsu-helper-hash", "sha256sum", "/system/bin/onn26-su").split()[0] == build["helper_sha256"],
               "Unexpected root helper")
     attempt = journal(device, "root-install-attempt.json")
     o.require(not attempt.exists(), "An installation attempt already exists; do not replay it")
     partition = o.root_partition(device.binding)
     proof = root(device, "root-and-stock-proof", "id; " + partition_hash_command(device.binding))
-    o.require("uid=0(root)" in proof["stdout"] and "u:r:onn26_root:s0" in proof["stdout"] and
-              o.PROFILE["init_boot_sha256"] + "  " + partition in proof["stdout"].splitlines(),
-              "DSU root or stock partition proof failed")
+    if row:
+        # ROW (jarvis2_row): verify root access but do not enforce a pinned stock hash.
+        # The ROW init_boot image differs from the US build; we capture the actual
+        # partition hash from the backup below and use it for the flash safety checks.
+        # On a fresh unrooted ROW device this records the genuine ROW stock hash.
+        o.require("uid=0(root)" in proof["stdout"] and "u:r:onn26_root:s0" in proof["stdout"],
+                  "DSU root helper did not return root on ROW device")
+    else:
+        o.require("uid=0(root)" in proof["stdout"] and "u:r:onn26_root:s0" in proof["stdout"] and
+                  o.PROFILE["init_boot_sha256"] + "  " + partition in proof["stdout"].splitlines(),
+                  "DSU root or stock partition proof failed")
     backup = pull_block(device, "/system/bin/onn26-su", device.s.path / "stock-init_boot.img")
-    o.require(backup["sha256"] == o.PROFILE["init_boot_sha256"], "Device backup differs from pinned stock")
+    if row:
+        # Use whatever is currently on the partition as the stock hash.
+        # The flash script verifies both the backup file and the live partition
+        # match this hash before writing, so the guard is still in effect.
+        stock_sha256 = backup["sha256"]
+    else:
+        o.require(backup["sha256"] == o.PROFILE["init_boot_sha256"], "Device backup differs from pinned stock")
+        stock_sha256 = o.PROFILE["init_boot_sha256"]
     token = uuid.uuid4().hex
     remote = "/data/local/tmp/onn26-root-install-" + token
     device_attempt = "/metadata/onn26-root-install-" + token
     local_script = device.s.path / "flash-once.sh"
-    local_script.write_text(flash_script(device.binding, boot, remote, device_attempt, patch["patched_image"]["sha256"]))
+    local_script.write_text(flash_script(device.binding, boot, remote, device_attempt,
+                                         patch["patched_image"]["sha256"], stock_sha256))
     device.shell("mkdir-root-staging", "mkdir", "-m", "755", remote)
     for source, name in [(image, "patched-init_boot.img"), (Path(backup["file"]), "stock-init_boot.img"),
                          (local_script, "flash-once.sh")]:
@@ -507,21 +515,27 @@ def cleanup_root(device, args):
     stage = read(Path(installed["stage"]))
     bound(device, stage)
     stock = Path(installed["stock_backup"]["file"])
-    o.require(o.digest(stock) == o.PROFILE["init_boot_sha256"], "Stock backup changed")
+    expected_stock_sha256 = (installed["stock_backup"]["sha256"] if o.is_row_device(device.binding)
+                             else o.PROFILE["init_boot_sha256"])
+    o.require(o.digest(stock) == expected_stock_sha256, "Stock backup changed")
     compressed = device.s.path / "stock-init_boot.img.gz"
     with stock.open("rb") as source, compressed.open("xb") as output:
         with gzip.GzipFile(fileobj=output, mode="wb", filename="", mtime=0) as stream:
             shutil.copyfileobj(source, stream)
     remote = "/data/local/tmp/onn26-backup-" + uuid.uuid4().hex + ".gz"
     device.push_checked(compressed, remote)
-    directory = "/data/magisk_backup_" + o.PROFILE["root_stock_sha1"]
+    if o.is_row_device(device.binding):
+        stock_sha1 = hashlib.sha1(stock.read_bytes()).hexdigest()
+    else:
+        stock_sha1 = o.PROFILE["root_stock_sha1"]
+    directory = "/data/magisk_backup_" + stock_sha1
     command = ("set -e; test ! -e " + directory + "/boot.img.gz; mkdir -p " + directory +
                "; chmod 700 " + directory + "; cp " + shlex.quote(remote) + " " + directory +
                "/boot.img.gz; chown 0:0 " + directory + " " + directory + "/boot.img.gz; chmod 600 " +
                directory + "/boot.img.gz; sync; /data/adb/magisk/busybox gzip -dc " + directory +
                "/boot.img.gz | sha256sum")
     result = root(device, "save-magisk-stock-backup", command, helper="/debug_ramdisk/su")
-    o.require(result["stdout"].split()[0] == o.PROFILE["init_boot_sha256"], "On-device stock backup mismatch")
+    o.require(result["stdout"].split()[0] == expected_stock_sha256, "On-device stock backup mismatch")
     device.shell("remove-backup-transfer", "rm", remote)
     if state(device) == "installed\ndisabled":
         # This is the package's own guest: original Android identity and its

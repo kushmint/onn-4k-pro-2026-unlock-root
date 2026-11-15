@@ -408,7 +408,7 @@ class Guide:
             elif phase in ("stock_stage", "root_stage"):
                 kind = "stock" if phase == "stock_stage" else "root"
                 image = "DSU test image" if kind == "stock" else "DSU root installation image"
-                self.ui.say("\nCopying the " + image + " to the onn. It stays off until the next restart step...")
+                self.ui.say("\nCopying the " + image + " to the onn. It stays on until the next restart step...")
                 self.act(kind + "_wait", build=results["build"]["build"], kind=kind,
                          rehearsal=results.get("stock_return", {}).get("rehearsal"))
             elif phase in ("stock_wait", "root_wait"):

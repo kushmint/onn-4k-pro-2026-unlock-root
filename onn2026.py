@@ -113,6 +113,10 @@ ROW_PROFILE = {
     "device": "jarvis2",
     "fingerprint": "onn/jarvis2_row/jarvis2:14/URO3.260203.009.A2/15016191:user/release-keys",
     "bootloader": "01.01.260304.134947",
+    # When booted into the DSU (US system image), the system partition reports the US build
+    # number but ro.product.name stays jarvis2_row (from the ROW vendor partition).
+    # Both fingerprints must be accepted during the DSU boot phases.
+    "dsu_fingerprint": "onn/jarvis2_row/jarvis2:14/URO3.260203.035.A1/15640252:user/release-keys",
 }
 
 
@@ -126,11 +130,15 @@ def active_profile(props):
 
 def validate_identity(props, unlocked=False):
     profile = active_profile(props)
-    expected = {"ro.product.device": profile["device"],
-                "ro.build.fingerprint": profile["fingerprint"],
-                "ro.bootloader": profile["bootloader"]}
-    for key, value in expected.items():
-        require(props.get(key) == value, "Unsupported or changed device: " + key)
+    accepted_fingerprints = {profile["fingerprint"]}
+    if "dsu_fingerprint" in profile:
+        accepted_fingerprints.add(profile["dsu_fingerprint"])
+    require(props.get("ro.build.fingerprint") in accepted_fingerprints,
+            "Unsupported or changed device: ro.build.fingerprint")
+    require(props.get("ro.product.device") == profile["device"],
+            "Unsupported or changed device: ro.product.device")
+    require(props.get("ro.bootloader") == profile["bootloader"],
+            "Unsupported or changed device: ro.bootloader")
     slot_profile(props)
     require(re.fullmatch(r"(?:JUSA|JCA)[A-Za-z0-9]+", props.get("ro.serialno", "")),
             "Missing or unexpected jarvis2 hardware serial")
@@ -140,7 +148,13 @@ def validate_identity(props, unlocked=False):
         require(all(props.get(k) == v for k, v in UNLOCKED.items()),
                 "Post-reboot Android unlock properties are not proved")
         require(props.get("sys.boot_completed") == "1", "Android boot is incomplete")
-    return {key: props[key] for key in IDENTITY}
+    # Normalise the binding: replace the DSU hybrid fingerprint with the base profile
+    # fingerprint so that all downstream comparisons use a single consistent value
+    # regardless of whether the device is in normal Android or the DSU session.
+    binding = {key: props[key] for key in IDENTITY}
+    if "dsu_fingerprint" in profile and binding.get("ro.build.fingerprint") == profile["dsu_fingerprint"]:
+        binding["ro.build.fingerprint"] = profile["fingerprint"]
+    return binding
 
 
 def verify_files():
@@ -218,6 +232,44 @@ class Device:
         self.call("push", "push", str(source), remote, timeout=30)
         actual = self.text("staged-hash", "sha256sum", remote).split()
         require(actual and actual[0] == digest(source), "Staged file hash mismatch")
+
+    def push_large(self, label, source, remote, timeout=600):
+        """Push a large file showing elapsed time, then save a receipt."""
+        import threading, time as _time
+        source = Path(source)
+        total_mb = source.stat().st_size // (1024 * 1024)
+        argv = [str(self.adb), "-s", self.target, "push", str(source), remote]
+        record = {"at": now(), "argv": argv, "timed_out": False}
+        self.s.counter += 1
+        receipt = self.s.path / f"{self.s.counter:03d}-{label}.json"
+        result_holder = {}
+        def _push():
+            try:
+                p = subprocess.run(argv, capture_output=True, text=True, errors="replace",
+                                   timeout=timeout, check=False, start_new_session=True)
+                result_holder.update(returncode=p.returncode, stdout=p.stdout, stderr=p.stderr,
+                                     timed_out=False)
+            except subprocess.TimeoutExpired as e:
+                decode = lambda x: x.decode(errors="replace") if isinstance(x, bytes) else x or ""
+                result_holder.update(returncode=None, timed_out=True,
+                                     stdout=decode(e.stdout), stderr=decode(e.stderr))
+            except OSError as e:
+                result_holder.update(returncode=None, timed_out=False, stdout="", stderr=str(e))
+        t = threading.Thread(target=_push, daemon=True)
+        t.start()
+        start = _time.monotonic()
+        while t.is_alive():
+            _time.sleep(1)
+            elapsed = int(_time.monotonic() - start)
+            print(f"Uploading DSU image ({total_mb} MiB): {elapsed}s elapsed", flush=True)
+        t.join()
+        elapsed = int(_time.monotonic() - start)
+        print(f"Uploading DSU image: done ({total_mb} MiB in {elapsed}s)", flush=True)
+        record.update(**result_holder)
+        save(receipt, record)
+        require(record.get("returncode") == 0 and not record.get("timed_out"),
+                f"{label} failed or timed out. No retry. Receipts: {self.s.path}")
+        return record
 
 
 def lock_state(device):
@@ -311,12 +363,20 @@ def download(url, destination, expected, expected_size=None):
         return destination
     temporary = destination.with_name(destination.name + ".partial-" + uuid.uuid4().hex)
     size = 0
+    content_length = None
     with urllib.request.urlopen(url, timeout=30) as source, temporary.open("xb") as output:
+        try:
+            content_length = int(source.headers.get("Content-Length", 0)) or None
+        except (TypeError, ValueError):
+            content_length = None
         while chunk := source.read(1024 * 1024):
             output.write(chunk)
             size += len(chunk)
             if size % (32 * 1024 * 1024) == 0:
-                print(f"Downloaded {size // (1024 * 1024)} MiB: {destination.name}", flush=True)
+                if content_length:
+                    print(f"Downloading {destination.name}: {size * 100 // content_length}% ({size // (1024 * 1024)} / {content_length // (1024 * 1024)} MiB)", flush=True)
+                else:
+                    print(f"Downloaded {size // (1024 * 1024)} MiB: {destination.name}", flush=True)
         output.flush()
         os.fsync(output.fileno())
     require(expected_size is None or size == expected_size, "Download size mismatch; partial file retained")

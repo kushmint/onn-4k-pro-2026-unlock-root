@@ -136,9 +136,10 @@ class Backend:
             if flow.state(device) != "normal":
                 raise TemporarySystemPresent("The onn already has a temporary Android installation. " + dsu_recovery.HINT)
             if phase == "baseline":
-                root = device.shell("existing-root", "test", "-x", "/debug_ramdisk/su", check=False)
-                o.require(root["returncode"] == 1 and not root["timed_out"],
-                          "Root is already present, or could not be checked. This guide will not reinstall over it.")
+                if not getattr(self.args, "reinstall", False):
+                    root = device.shell("existing-root", "test", "-x", "/debug_ramdisk/su", check=False)
+                    o.require(root["returncode"] == 1 and not root["timed_out"],
+                              "Root is already present, or could not be checked. This guide will not reinstall over it.")
                 if dsu_recovery.downloads(device):
                     raise TemporarySystemPresent("Temporary-system uploads from earlier work are still present. " + dsu_recovery.HINT)
                 space = device.text("free-space", "df", "-k", "/data").splitlines()[-1].split()
@@ -283,7 +284,8 @@ def start(args, ui=None):
                         break
             while True:
                 if restarting:
-                    state = dsu_recovery.restart(backend, path, state, record, selected, ui)
+                    state = dsu_recovery.restart(backend, path, state, record, selected, ui,
+                                                 skip_root_check=getattr(args, "reinstall", False))
                 guide = Guide(path, state, backend, ui)
                 guide.persist()
                 try:
@@ -311,6 +313,8 @@ def add_parser(sub):
     parser.add_argument("--preview", action="store_true", help="Explain the steps without device access")
     parser.add_argument("--restart-dsu", action="store_true",
                         help="Review removal of temporary Android/uploads and start again; keep prior records and backups")
+    parser.add_argument("--reinstall", action="store_true",
+                        help="Skip the existing-root check; use when re-testing on an already-rooted device")
     parser.add_argument("--ndk", type=Path, help="Optional NDK folder; otherwise detected or requested")
     parser.add_argument("--adb-public-key", type=Path, default=Path.home() / ".android/adbkey.pub")
     parser.add_argument("--mkfs-erofs", default="mkfs.erofs")

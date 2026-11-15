@@ -91,7 +91,7 @@ def build(args):
     o.require(__debug__, "Python optimization disables parser assertions; omit -O")
     progress("Checking the computer's EROFS tools...")
     check_erofs_tools(args.mkfs_erofs, args.fsck_erofs)
-    o.require(re.fullmatch(r"JUSA[A-Za-z0-9]+", args.serial), "Invalid hardware serial")
+    o.require(re.fullmatch(r"(?:JUSA|JCA)[A-Za-z0-9]+", args.serial), "Invalid hardware serial")
     slot = o.slot_profile({"ro.boot.slot_suffix": args.slot})
     o.require(o.PROFILE["ndk_version"] in (args.ndk / "source.properties").read_text(),
               "Use the recorded Android NDK revision")
@@ -119,8 +119,17 @@ def build(args):
     progress("Copying the temporary system's files...")
     shutil.copytree(roots["system"], tree, symlinks=True)
 
-    header = {"ONN26_SERIAL": args.serial, "ONN26_FINGERPRINT": o.PROFILE["fingerprint"],
-              "ONN26_BOOTLOADER": o.PROFILE["bootloader"], "ONN26_SLOT": args.slot}
+    is_row = args.serial.startswith("JCA")
+    if is_row:
+        # ROW device: the binary runs inside the DSU which reports the hybrid fingerprint
+        # (ROW vendor + US system build) and the ROW device's own bootloader.
+        fp = o.ROW_PROFILE.get("dsu_fingerprint", o.PROFILE["fingerprint"])
+        bl = o.ROW_PROFILE["bootloader"]
+    else:
+        fp = o.PROFILE["fingerprint"]
+        bl = o.PROFILE["bootloader"]
+    header = {"ONN26_SERIAL": args.serial, "ONN26_FINGERPRINT": fp,
+              "ONN26_BOOTLOADER": bl, "ONN26_SLOT": args.slot}
     (out / "onn26_binding.h").write_text("".join(
         "#define " + k + " " + json.dumps(v) + "\n" for k, v in header.items()))
     compiler = args.ndk / "toolchains/llvm/prebuilt/linux-x86_64/bin/armv7a-linux-androideabi28-clang"

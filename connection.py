@@ -233,8 +233,10 @@ def inspect(device, current, targets):
             if result["returncode"] == 0 and not result["timed_out"]:
                 properties = o.parse_props(result["stdout"])
                 try:
-                    o.validate_identity(properties)
-                    row["properties"] = properties
+                    normalized = o.validate_identity(properties)
+                    # Store normalized properties so matches() compares against
+                    # the canonical binding (e.g. DSU hybrid fingerprint → ROW base).
+                    row["properties"] = {**properties, **normalized}
                 except o.Stop:
                     row["reason"] = "Unsupported firmware or hardware profile"
             else:
@@ -280,6 +282,24 @@ def reconnect(device, connection_path, candidate=None, scan_lan=False):
             targets.update(discovered)
     if not candidate and scan_lan and not any(matches(binding, row.get("properties")) for row in rows):
         found = scan(device.s)
+        # Also scan the last-known device IP's /24 — the device may be on a different
+        # subnet from the host (e.g. different VLAN). This catches IP changes within
+        # the device's own subnet after a reboot.
+        last_ip = original.get("last_network_address") or (
+            original["target"] if not MDNS_TRANSPORT.fullmatch(original["target"]) else None)
+        if last_ip:
+            try:
+                device_host = last_ip.split(":")[0]
+                device_net = ipaddress.IPv4Network((device_host, 24), strict=False)
+                _, own = active_lans(json.loads(
+                    device.s.run("host-lans-dev", ["ip", "-j", "-4", "addr", "show", "scope", "global"],
+                                 timeout=5, check=False).get("stdout", "[]")))
+                device_addresses = [str(a) for a in device_net.hosts() if str(a) not in own]
+                with ThreadPoolExecutor(max_workers=32) as pool:
+                    device_found = sorted({v for v in pool.map(probe, device_addresses) if v})
+                found = sorted(set(found) | set(device_found))
+            except Exception:
+                pass
         o.require(len(targets | set(found)) <= 64, "Too many ADB targets; use reconnect --candidate IP:port")
         for target in found:
             if target not in targets:

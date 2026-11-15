@@ -109,7 +109,7 @@ def check_host(device, state):
                   "An uncertain unlock or firmware operation cannot be abandoned by DSU restart.")
 
 
-def original_android(device, expected_id=None, expected_boot=None):
+def original_android(device, expected_id=None, expected_boot=None, skip_root_check=False):
     props = device.identify(unlocked=True)
     o.require(props.get("sys.boot_completed") == "1", "Wait for original Android to finish starting before DSU restart.")
     current = device.text("restart-dsu-state", "gsi_tool", "status")
@@ -120,16 +120,17 @@ def original_android(device, expected_id=None, expected_boot=None):
     android_id = o.read_android_id(device, "restart-original-android")
     o.require(expected_id is None or android_id == expected_id, "Original Android installation changed; restart refused.")
     o.require(expected_boot is None or boot == expected_boot, "Boot changed during DSU restart; no further cleanup.")
-    root = device.shell("restart-existing-root", "test", "-e", "/debug_ramdisk/su", check=False)
-    o.require(root["returncode"] == 1 and not root["timed_out"],
-              "Permanent root is present or could not be excluded. Use the existing root-verification/cleanup flow.")
+    if not skip_root_check:
+        root = device.shell("restart-existing-root", "test", "-e", "/debug_ramdisk/su", check=False)
+        o.require(root["returncode"] == 1 and not root["timed_out"],
+                  "Permanent root is present or could not be excluded. Use the existing root-verification/cleanup flow.")
     return {"boot_id": boot, "android_id": android_id, "dsu_state": current}
 
 
-def inspect(device, state):
+def inspect(device, state, skip_root_check=False):
     device.identify(unlocked=True)
     check_host(device, state)
-    current = original_android(device)
+    current = original_android(device, skip_root_check=skip_root_check)
     for path in sorted(journal_directory(device, allow_pending=True).glob("dsu-*-attempt.json")):
         record = read(path)
         o.require(record.get("binding") == device.binding, "A DSU attempt belongs to another device or firmware")
@@ -153,13 +154,13 @@ def restart_guide(location, plan):
     return result
 
 
-def restart(backend, guide_path, state, record, selected, ui):
+def restart(backend, guide_path, state, record, selected, ui, skip_root_check=False):
     """Review, remove and commit a fresh cycle; interruptions retain all evidence."""
     context = backend.prepare("restart_dsu")
     device, guide_path = context.device, Path(guide_path)
     base = directory(device)
     transaction = pending(base)
-    current = inspect(device, state)
+    current = inspect(device, state, skip_root_check=skip_root_check)
     if transaction:
         o.require(transaction["binding"] == device.binding, "DSU restart belongs to another device")
         location = base / "dsu-restarts" / transaction["cycle"]
